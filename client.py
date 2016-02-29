@@ -9,6 +9,7 @@ from socket import *
 import sys
 import select
 from os import urandom
+import random
 import pickle
 import time
 from ssl import *
@@ -39,6 +40,7 @@ if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
 
+"""
 key = 'abcdefgh12345678'
 
 def encrypt_key():
@@ -47,6 +49,7 @@ def encrypt_key():
 		server_key = RSA.importKey(k)
 	encrypted = server_key.encrypt(key, 16)
 	return encrypted
+"""
 
 #encrypt the file using AES cipher in CBC mode
 #read entire plaintext
@@ -54,7 +57,7 @@ def encrypt_key():
 #pad the plaintext with null chars 
 #prepend the ciphertext with original size and iv
 #encrypt plaintext and append to ciiphertext
-def encrypt_file():
+def encrypt_file(key, fname):
 	encryptor = AES.new(key, mode, iv)
 	with open(fname, 'rb') as f:
 		plaintext = f.read()
@@ -69,12 +72,12 @@ def encrypt_file():
 
 #hash the file using SHA 256
 #return the hash object
-def hash_file():
-	with open(fname, 'rb') as f:
+def hash_file(f):
+	with open(f, 'rb') as f:
 		plaintext = f.read()
 	h = SHA256.new(plaintext)
 	return h
-
+"""
 #sign the hash using RSA private key
 #return the encrypted hash
 def encrypt_hash(hash):
@@ -83,6 +86,31 @@ def encrypt_hash(hash):
 	signer = PKCS1_v1_5.new(pk)
 	sig = signer.sign(hash)
 	return sig	
+"""
+def handle_msg(m):
+	m = m.split()
+	if ((len(m) > 4) or (len(m) == 2)):
+		print 'ERROR'
+		return 
+	cmd = m[0]
+	if cmd == 'stop':
+		return
+	fname = m[1]
+	flag = m[2]
+	if flag == 'E':
+		passwd = m[3]
+	
+	if cmd == 'put':
+		Hash = hash_file(fname)
+		if flag == 'E':
+			random.seed(passwd)
+			key = ''
+			for i in range(0,16):
+				key += str(random.randint(0,9))
+			Encfile = encrypt_file(key, fname)
+			print Hash.hexdigest()
+			print Encfile
+			return Encfile, Hash
 
 #set up client socket
 client = socket(AF_INET, SOCK_STREAM)
@@ -120,11 +148,17 @@ while 1:
 			else:
 				msg = sys.stdin.readline()
 				if msg:
+					print 'client: ', msg
+					out = handle_msg(msg)
 					tls_client.send(msg)
+					time.sleep(1)
+					tls_client.send(out[0])
+					time.sleep(1)
+					tls_client.send(out[1].hexdigest())	
+
 
 	#catch crtl-c interrupts
 	except (KeyboardInterrupt, SystemExit):
 		client.send('bye')
 		client.close()
 		sys.exit()
-

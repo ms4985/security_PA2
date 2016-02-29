@@ -35,6 +35,7 @@ server.listen(5)
 print "server listening for clients..."
 connections.append(server)
 
+#wrap in tls
 tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, server_side=True, certfile='server.crt', keyfile = 'server.key', ca_certs='client.crt', cert_reqs=CERT_REQUIRED)
 
 #handles receiving data from the client
@@ -43,35 +44,19 @@ tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, server_side=True, c
 def handle_client(sock, address):
 	try:
 		data = sock.recv(SIZE)
-		#client has exited so cleanup
-		if data == 'bye':
-			connections.remove(sock)
-			print 'client disconnected'
-			sock.close()
-		#client is about to send the key
-		if data == 'key':
-			handle_key(sock)
-		#client is about to send the file
-		if data == 'file':
-			handle_file(sock)
-		#client is about to send the signature
-		if data == 'signature':
-			handle_sig()
+		cmd = data.split()
+		if cmd[0] == 'put':
+			handle_put(data, sock)
+		if cmd[0] == 'get':
+			print data
+		if cmd[0] == 'stop\n':
+			print data
+		else:
+			sock.send("invalid command")	
+
 	except:
 		#no data received by client so move on
 		pass
-
-#load key data using pickle module
-#import servers private key
-#decrypt key from client using private key
-def handle_key(sock):
-	data = sock.recv(SIZE)
-	data = pickle.loads(data)
-	global KEY
-	with open('s_privkey.pem', 'r') as f:
-		p = f.read()
-		pk = RSA.importKey(p)
-	KEY = pk.decrypt(data)
 
 #receive file from client
 #parse original size of plaintext
@@ -94,26 +79,21 @@ def handle_file(sock):
 	with open('decryptedfile', 'wb') as f:
 		f.write(plain)
 
-#receive signature from client
-#check if plaintext is valid, if not return
-#import clients public key and use to decrypt signature
-#hash the plaintext 
-#generate a verifier and compare with the hash
-#if equal, verification passed, if not, failed
-def handle_sig():
-	data = sock.recv(SIZE)
-	data = pickle.loads(data)
-	if plain == 'ERROR':
-		print 'Verification Failed'
-		return
-	with open('c_pubkey.pem', 'r') as f:
-		pk = RSA.importKey(f.read())
-	h = SHA256.new(plain)
-	verifier = PKCS1_v1_5.new(pk)
-	if (verifier.verify(h, data) == True):
-		print 'Verification Passed'
-	else:
-		print 'Verficiation Failed'
+def handle_put(data, sock):
+	print 'in handleput'
+	data = data.split()
+	fname = data[1]
+	flag = data[2]
+	if flag == 'E':
+		passwd = data[3]
+	print 'after data handle'
+	File = sock.recv(SIZE)
+	with open(fname, 'w') as f:
+		f.write(File)
+	Hash = sock.recv(SIZE)
+	with open(fname + '.sha256', 'w') as f:
+		f.write(Hash)
+	print 'after opens'
 
 #handle data send from client connections		
 try:

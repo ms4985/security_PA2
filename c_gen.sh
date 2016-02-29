@@ -1,6 +1,3 @@
 #!/bin/bash
 
-openssl genrsa -des3 -out client.orig.key 2048
-openssl rsa -in client.orig.key -out client.key
-openssl req -new -key client.key -out client.csr
-openssl x509 -req -days 1 -in client.csr -signkey client.key -out client.crt
+openssl req -x509 -sha256 -nodes -days 356 -newkey rsa:2048 -keyout client.key -out client.crt
