@@ -5,12 +5,13 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from Crypto.Signature import PKCS1_v1_5
-import socket
+from socket import *
 import sys
 import select
 from os import urandom
 import pickle
 import time
+from ssl import *
 
 #globals
 SIZE = 4096
@@ -21,29 +22,24 @@ iv = urandom(BLOCK_SIZE)
 mode = AES.MODE_CBC
 
 #check number of arguments
-if len(sys.argv) != 5:
+if len(sys.argv) != 3:
 	print 'ERROR: not enough arguments'
 	sys.exit()
 
 #handle user inputs
 host = sys.argv[1]
-try:
+"""try:
 	socket.inet_aton(host)
 except:
 	print 'ERROR: invalid ip address'
 	sys.exit()
-
+"""
 port = int(sys.argv[2])
 if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
 
-key = sys.argv[3]
-if len(key) != 16:
-	print 'ERROR: password is not 16 characters long'
-	sys.exit()
-
-fname = sys.argv[4]
+key = 'abcdefgh12345678'
 
 def encrypt_key():
 	with open('s_pubkey.pem', 'r') as f:
@@ -89,12 +85,13 @@ def encrypt_hash(hash):
 	return sig	
 
 #set up client socket
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client = socket(AF_INET, SOCK_STREAM)
+tls_client = wrap_socket(client, ssl_version=PROTOCOL_TLSv1, cert_reqs=CERT_NONE)
 
 #try to connect to server
 try:
 	print "connecting..."
-	client.connect((host, port))
+	tls_client.connect((host, port))
 except:
 	print "no server on host/port"
 	sys.exit()
@@ -105,11 +102,11 @@ sent = False
 
 #handle data sent from server
 while 1:
-	sockets = [sys.stdin, client]
+	sockets = [sys.stdin, tls_client]
 	read, write, error = select.select(sockets, [], [])
 	try:
 		for sock in read:
-			if sock == client:
+			if sock == tls_client:
 				data = sock.recv(SIZE)
 				#if there is data it should be the 'connected' respons
 				#client prints message and begins transmitting to server
@@ -141,7 +138,7 @@ while 1:
 			else:
 				msg = sys.stdin.readline()
 				if msg:
-					client.send(msg)
+					tls_client.send(msg)
 
 	#catch crtl-c interrupts
 	except (KeyboardInterrupt, SystemExit):

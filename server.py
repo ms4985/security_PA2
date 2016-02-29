@@ -5,9 +5,10 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from Crypto.Signature import PKCS1_v1_5
-import socket
+from socket import *
 import sys
 import select
+from ssl import *
 import pickle
 
 #globals
@@ -17,7 +18,7 @@ connections = []
 aes_mode = AES.MODE_CBC
 
 #handle user input
-if len(sys.argv) != 3:
+if len(sys.argv) != 2:
 	print 'ERROR: not enough arguments'
 	sys.exit()
 
@@ -26,18 +27,15 @@ if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
 
-mode = sys.argv[2]
-if ((mode != 't') and (mode != 'u')):
-	print 'ERROR: invalid mode'
-	sys.exit()
-
 #set up server socket
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server = socket(AF_INET, SOCK_STREAM)
 server.bind((host,port))
-print "server is running on: ", socket.gethostbyname(socket.gethostname())
+print "server is running on: ", gethostbyname(gethostname())
 server.listen(5)
 print "server listening for clients..."
 connections.append(server)
+
+tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, cert_reqs= CERT_NONE, server_side=True, certfile='certfile.pem')
 
 #handles receiving data from the client
 #client sends a keyword first to the server
@@ -88,9 +86,6 @@ def handle_file(sock):
 	ctxt = ctxt[BLOCK_SIZE*2:]
 	decryptor = AES.new(KEY, aes_mode, iv)
 	global plain
-	if mode == 'u':
-		with open('fakefile', 'rb') as f:
-			ctxt = f.read()
 	if (len(ctxt) % BLOCK_SIZE) != 0:
 		plain = 'ERROR'
 		return
@@ -127,7 +122,7 @@ try:
 		for sock in read:
 			if sock == server:
 				#accept incoming connections
-				socket, address = server.accept()
+				socket, address = tls_server.accept()
 				socket.sendto("connected!", address)
 				connections.append(socket)
 				print 'client connected'
