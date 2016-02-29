@@ -36,7 +36,10 @@ print "server listening for clients..."
 connections.append(server)
 
 #wrap in tls
-tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, server_side=True, certfile='server.crt', keyfile = 'server.key', ca_certs='client.crt', cert_reqs=CERT_REQUIRED)
+tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, 
+							server_side=True, certfile='server.crt', 
+							keyfile = 'server.key', ca_certs='client.crt', 
+							cert_reqs=CERT_REQUIRED)
 
 #handles receiving data from the client
 #client sends a keyword first to the server
@@ -88,7 +91,7 @@ def handle_put(data, sock):
 		passwd = data[3]
 	print 'after data handle'
 	File = sock.recv(SIZE)
-	with open(fname, 'w') as f:
+	with open('_' + fname, 'w') as f:
 		f.write(File)
 	Hash = sock.recv(SIZE)
 	with open(fname + '.sha256', 'w') as f:

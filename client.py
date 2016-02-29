@@ -1,4 +1,4 @@
-# Megan Skrypek
+3# Megan Skrypek
 # ms4985
 
 from Crypto.Cipher import AES
@@ -29,27 +29,18 @@ if len(sys.argv) != 3:
 
 #handle user inputs
 host = sys.argv[1]
-"""try:
+"""
+try:
 	socket.inet_aton(host)
 except:
 	print 'ERROR: invalid ip address'
 	sys.exit()
 """
+
 port = int(sys.argv[2])
 if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
-
-"""
-key = 'abcdefgh12345678'
-
-def encrypt_key():
-	with open('s_pubkey.pem', 'r') as f:
-		k = f.read()
-		server_key = RSA.importKey(k)
-	encrypted = server_key.encrypt(key, 16)
-	return encrypted
-"""
 
 #encrypt the file using AES cipher in CBC mode
 #read entire plaintext
@@ -77,44 +68,58 @@ def hash_file(f):
 		plaintext = f.read()
 	h = SHA256.new(plaintext)
 	return h
-"""
-#sign the hash using RSA private key
-#return the encrypted hash
-def encrypt_hash(hash):
-	with open('c_privkey.pem', 'r') as f:
-		pk = RSA.importKey(f.read())
-	signer = PKCS1_v1_5.new(pk)
-	sig = signer.sign(hash)
-	return sig	
-"""
-def handle_msg(m):
-	m = m.split()
-	if ((len(m) > 4) or (len(m) == 2)):
-		print 'ERROR'
-		return 
+
+def handle_put(fname, f):
+	Hash = hash_file(fname)
+	if f == 'E':
+		random.seed(passwd)
+		key = ''
+		for i in range(0,16):
+			key += str(random.randint(0,9))
+		Encfile = encrypt_file(key, fname)
+		print Hash.hexdigest()
+		print Encfile
+		return Encfile, Hash
+	else:
+		with open(fname, 'rb') as f:
+			plaintext = f.read()
+		return plaintext, Hash
+
+
+def handle_get(fname, f):
+	return 
+
+#parse command from client, return errors when necessary
+def handle_msg(msg):
+	m = msg.split()
+	if len(m) > 4:
+		return 'ERROR: Too many parameters'
+	elif len(m) == 2:
+		return 'ERROR: Missing parameters, minimum of a filename and \'N\' or \'E\' is requried'
 	cmd = m[0]
 	if cmd == 'stop':
-		return
+		return cmd
 	fname = m[1]
 	flag = m[2]
 	if flag == 'E':
 		passwd = m[3]
-	
+	elif flag == 'N':
+		pass
+	else:
+		return 'ERROR: Invalid parameter ' + '\'' + flag + '\''
 	if cmd == 'put':
-		Hash = hash_file(fname)
-		if flag == 'E':
-			random.seed(passwd)
-			key = ''
-			for i in range(0,16):
-				key += str(random.randint(0,9))
-			Encfile = encrypt_file(key, fname)
-			print Hash.hexdigest()
-			print Encfile
-			return Encfile, Hash
+		return handle_put(fname, f)
+	elif cmd == 'get':
+		return handle_get(fname, f)
+	else:
+		return 'ERROR: Invalid commands, options are \"get\" \"put\" \"stop\"'
 
 #set up client socket
 client = socket(AF_INET, SOCK_STREAM)
-tls_client = wrap_socket(client, certfile = 'client.crt', keyfile = 'client.key', ca_certs='server.crt', ssl_version=PROTOCOL_TLSv1, cert_reqs=CERT_REQUIRED)
+#wrap client in tls wrapper
+tls_client = wrap_socket(client, certfile = 'client.crt', 
+						keyfile = 'client.key', ca_certs='server.crt', 
+						ssl_version=PROTOCOL_TLSv1, cert_reqs=CERT_REQUIRED)
 
 #try to connect to server
 try:
@@ -123,9 +128,6 @@ try:
 except:
 	print "no server on host/port"
 	sys.exit()
-
-#failsafe in case client doesnt disconnect
-#prevents resending file, signature and key to server
 
 #handle data sent from server
 while 1:
@@ -146,16 +148,23 @@ while 1:
 					sys.exit()
 			#send data to server
 			else:
+				#read in commands from client and only send to server if valid
 				msg = sys.stdin.readline()
 				if msg:
-					print 'client: ', msg
+					#receive output of handle_msg helper fn
 					out = handle_msg(msg)
-					tls_client.send(msg)
-					time.sleep(1)
-					tls_client.send(out[0])
-					time.sleep(1)
-					tls_client.send(out[1].hexdigest())	
-
+					#if the output is not an error, send command to server for processing
+					if out == 'stop':
+						tls_client.send(msg)
+					elif 'ERROR' not in out:
+						tls_client.send(msg)
+						#need to sleep in order to give server time to process
+						time.sleep(1)
+						tls_client.send(out[0])
+						time.sleep(1)
+						tls_client.send(out[1].hexdigest())
+					else:
+						print out
 
 	#catch crtl-c interrupts
 	except (KeyboardInterrupt, SystemExit):
