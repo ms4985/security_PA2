@@ -10,6 +10,7 @@ import sys
 import select
 from ssl import *
 import pickle
+import time
 
 #globals
 SIZE = 4096
@@ -46,57 +47,53 @@ tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1,
 #then the server responds accordingly with the correct helper fn
 def handle_client(sock, address):
 	try:
+		#try:
 		data = sock.recv(SIZE)
 		cmd = data.split()
 		if cmd[0] == 'put':
 			handle_put(data, sock)
 		if cmd[0] == 'get':
+			out = handle_get(data)
+			sock.send(out[0])
+			time.sleep(1)
+			sock.send(out[1])
+		if cmd[0] == 'stop':
 			print data
-		if cmd[0] == 'stop\n':
-			print data
-		else:
-			sock.send("invalid command")	
-
+		#finally:
+		#	print 'handled client'
 	except:
 		#no data received by client so move on
 		pass
 
-#receive file from client
-#parse original size of plaintext
-#parse iv and use for decryptor
-#if untrusted mode, read from fakefile and use as plaintext
-#	if fakefile is not padded, verfication failed
-#if trusted mode, decrypt plaintext and save to file
-def handle_file(sock):
-	ctxt = sock.recv(SIZE)
-	size = ctxt[:BLOCK_SIZE]
-	iv = ctxt[BLOCK_SIZE:BLOCK_SIZE*2]
-	ctxt = ctxt[BLOCK_SIZE*2:]
-	decryptor = AES.new(KEY, aes_mode, iv)
-	global plain
-	if (len(ctxt) % BLOCK_SIZE) != 0:
-		plain = 'ERROR'
-		return
-	plain = decryptor.decrypt(ctxt)
-	plain = plain[:int(size)]
-	with open('decryptedfile', 'wb') as f:
-		f.write(plain)
 
 def handle_put(data, sock):
-	print 'in handleput'
 	data = data.split()
 	fname = data[1]
 	flag = data[2]
 	if flag == 'E':
 		passwd = data[3]
-	print 'after data handle'
 	File = sock.recv(SIZE)
-	with open('_' + fname, 'w') as f:
+	with open( fname, 'wb') as f:
 		f.write(File)
 	Hash = sock.recv(SIZE)
-	with open(fname + '.sha256', 'w') as f:
+	with open(fname + '.sha256', 'wb') as f:
 		f.write(Hash)
-	print 'after opens'
+
+def handle_get(data):
+	data = data.split()
+	fname = data[1]
+	try:
+		with open(fname, 'rb') as f:
+			File = f.read()
+	except:
+		return 'ERROR: Invalid filename or file does not exist'
+	try:
+		with open(fname + '.sha256', 'rb') as f:
+			Hash = f.read()
+	except:
+		return 'ERROR: Cannot read hash file'
+	return File, Hash
+	
 
 #handle data send from client connections		
 try:

@@ -1,4 +1,4 @@
-3# Megan Skrypek
+# Megan Skrypek
 # ms4985
 
 from Crypto.Cipher import AES
@@ -42,6 +42,13 @@ if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
 
+def compute_key(seed):
+	random.seed(seed)
+	key = ''
+	for i in range(0,16):
+		key += str(random.randint(0,9))
+	return key
+
 #encrypt the file using AES cipher in CBC mode
 #read entire plaintext
 #calculate original size and remainder when modding using block size
@@ -63,54 +70,83 @@ def encrypt_file(key, fname):
 
 #hash the file using SHA 256
 #return the hash object
-def hash_file(f):
-	with open(f, 'rb') as f:
-		plaintext = f.read()
+def hash_file(fname):
+	try:
+		with open(fname, 'rb') as f:
+			plaintext = f.read()
+	except:
+		return 'ERROR: Invalid file name'
 	h = SHA256.new(plaintext)
 	return h
 
-def handle_put(fname, f):
+#parse original size of plaintext
+#parse iv and use for decryptor
+#if untrusted mode, read from fakefile and use as plaintext
+#	if fakefile is not padded, verfication failed
+#if trusted mode, decrypt plaintext and save to file
+def decrypt_file(File, passwd):
+	key = compute_key(passwd)
+	size = File[:BLOCK_SIZE]
+	i = File[BLOCK_SIZE:BLOCK_SIZE*2]
+	File = File[BLOCK_SIZE*2:]
+	decryptor = AES.new(key, mode, i)
+	if (len(File) % BLOCK_SIZE) != 0:
+		return 'ERROR: Couldnt decrypt'
+	plain = decryptor.decrypt(File)
+	plain = plain[:int(size)]
+	return plain
+
+def handle_put(fname, f, passwd):
 	Hash = hash_file(fname)
+	if Hash == 'ERROR: Invalid file name':
+		return Hash
 	if f == 'E':
-		random.seed(passwd)
-		key = ''
-		for i in range(0,16):
-			key += str(random.randint(0,9))
+		key = compute_key(passwd)
 		Encfile = encrypt_file(key, fname)
-		print Hash.hexdigest()
-		print Encfile
 		return Encfile, Hash
 	else:
-		with open(fname, 'rb') as f:
-			plaintext = f.read()
-		return plaintext, Hash
-
-
-def handle_get(fname, f):
-	return 
+		try:
+			with open(fname, 'rb') as f:
+				plaintext = f.read()
+			return plaintext, Hash
+		except:
+			return 'ERROR: Invalid file name'
 
 #parse command from client, return errors when necessary
 def handle_msg(msg):
 	m = msg.split()
-	if len(m) > 4:
+	length = len(m)
+	if length > 4:
 		return 'ERROR: Too many parameters'
-	elif len(m) == 2:
+	elif length == 2:
 		return 'ERROR: Missing parameters, minimum of a filename and \'N\' or \'E\' is requried'
 	cmd = m[0]
 	if cmd == 'stop':
 		return cmd
-	fname = m[1]
-	flag = m[2]
-	if flag == 'E':
-		passwd = m[3]
-	elif flag == 'N':
-		pass
-	else:
-		return 'ERROR: Invalid parameter ' + '\'' + flag + '\''
-	if cmd == 'put':
-		return handle_put(fname, f)
-	elif cmd == 'get':
-		return handle_get(fname, f)
+	if ((cmd == 'put') and (length > 1)):
+		fname = m[1]
+		flag = m[2]
+		if flag == 'E':
+			if length != 4:
+				return 'ERROR: Missing parameters, \"E\" requires a password'
+			passwd = m[3]
+		elif flag == 'N':
+			pass
+		else:
+			return 'ERROR: Invalid parameter ' + '\'' + flag + '\''
+		return handle_put(fname, flag, passwd)
+	elif ((cmd == 'get') and (length > 1)):
+		fname = m[1]
+		flag = m[2]
+		if flag == 'E':
+			if length != 4:
+				return 'ERROR: Missing parameters, \"E\" requires a password'
+			passwd = m[3]
+		elif flag == 'N':
+			pass
+		else:
+			return 'ERROR: Invalid parameter ' + '\'' + flag + '\''
+		return msg
 	else:
 		return 'ERROR: Invalid commands, options are \"get\" \"put\" \"stop\"'
 
@@ -156,13 +192,29 @@ while 1:
 					#if the output is not an error, send command to server for processing
 					if out == 'stop':
 						tls_client.send(msg)
-					elif 'ERROR' not in out:
+					elif (('ERROR' not in out) and ('put' in msg)):
 						tls_client.send(msg)
 						#need to sleep in order to give server time to process
 						time.sleep(1)
 						tls_client.send(out[0])
 						time.sleep(1)
 						tls_client.send(out[1].hexdigest())
+						msg = msg.split()
+						print 'transfer of', msg[1], 'complete'
+					elif (('ERROR' not in out) and ('get' in msg)):
+						tls_client.send(msg)
+						servFile = tls_client.recv(SIZE)
+						msg = msg.split()
+						if msg[2] == 'E':
+							enc = decrypt_file(servFile, msg[3])
+							h = SHA256.new(enc)
+						Hash = tls_client.recv(SIZE)
+						if h.hexdigest() == Hash:
+							with open(msg[1], 'wb') as f:
+								f.write(enc)
+							print 'retrieval of', msg[1], 'complete'
+						else:
+							print 'ERROR: Computed hash of', msg[1], 'does not match retrieved hash'
 					else:
 						print out
 
