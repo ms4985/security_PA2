@@ -35,7 +35,7 @@ server.listen(5)
 print "server listening for clients..."
 connections.append(server)
 
-tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, cert_reqs= CERT_NONE, server_side=True, certfile='certfile.pem')
+tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1, server_side=True, certfile='server.crt', keyfile = 'server.key', ca_certs='client.crt', cert_reqs=CERT_REQUIRED)
 
 #handles receiving data from the client
 #client sends a keyword first to the server
@@ -123,7 +123,7 @@ try:
 			if sock == server:
 				#accept incoming connections
 				socket, address = tls_server.accept()
-				socket.sendto("connected!", address)
+				socket.send("connected!")
 				connections.append(socket)
 				print 'client connected'
 			else:

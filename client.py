@@ -86,7 +86,7 @@ def encrypt_hash(hash):
 
 #set up client socket
 client = socket(AF_INET, SOCK_STREAM)
-tls_client = wrap_socket(client, ssl_version=PROTOCOL_TLSv1, cert_reqs=CERT_NONE)
+tls_client = wrap_socket(client, certfile = 'client.crt', keyfile = 'client.key', ca_certs='server.crt', ssl_version=PROTOCOL_TLSv1, cert_reqs=CERT_REQUIRED)
 
 #try to connect to server
 try:
@@ -98,7 +98,6 @@ except:
 
 #failsafe in case client doesnt disconnect
 #prevents resending file, signature and key to server
-sent = False
 
 #handle data sent from server
 while 1:
@@ -113,23 +112,6 @@ while 1:
 				#sends the encrypted key, encrypted file, and signature
 				if data:
 					print data
-					if sent == False:
-						sock.send('key')
-						ek = encrypt_key()
-						ek = pickle.dumps(ek)
-						sock.send(ek)
-						ctxt = encrypt_file()
-						time.sleep(1)
-						sock.send('file')
-						sock.send(ctxt)
-						time.sleep(1)
-						sock.send('signature')
-						h = hash_file()
-						signature = encrypt_hash(h)
-						signature = pickle.dumps(signature)
-						sock.send(signature)
-						sent == True
-						sys.exit()
 				#exit if server quit
 				else:
 					print "server disconnected"
