@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#Megan Skrypek
+#ms4985
+
 openssl rsa -in server.key -pubout > s_pubkey.pem
 openssl rsa -in server.key > s_privkey.pem
 

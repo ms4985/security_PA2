@@ -53,26 +53,29 @@ def handle_client(sock, address):
 			handle_put(data, sock)
 		if cmd[0] == 'get':
 			out = handle_get(data)
+
+			#if file cannot be opened, send error
 			if 'ERROR' in out:
 				sock.send(out)
+
+			#else send the file and hash
 			else:
 				sock.send(out[0])
 				time.sleep(1)
 				sock.send(out[1])
+
+		#remove the	client socket from connections and close it	
 		if cmd[0] == 'stop':
 			connections.remove(sock)
 			sock.close()
-			sys.exit()
 	except:
 		#no data received by client so move on
 		pass
 
+#receive the file and hash from the client and write it to a file
 def handle_put(data, sock):
 	data = data.split()
 	fname = data[1]
-	flag = data[2]
-	if flag == 'E':
-		passwd = data[3]
 	File = sock.recv(SIZE)
 	with open( fname, 'wb') as f:
 		f.write(File)
@@ -80,6 +83,7 @@ def handle_put(data, sock):
 	with open(fname + '.sha256', 'wb') as f:
 		f.write(Hash)
 
+#try to open the file and hash and return error string upon failure
 def handle_get(data):
 	data = data.split()
 	fname = data[1]
@@ -115,6 +119,7 @@ try:
 				except:
 					#client has disconnected
 					sock.close()
+					
 #catch ctrl-c interrupts to exit
 except (KeyboardInterrupt, SystemExit):
 	print "\nserver shutting down..."
