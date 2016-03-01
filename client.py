@@ -42,6 +42,8 @@ if ((port < 1024) or (port > 49151)):
 	print 'ERROR: invalid port'
 	sys.exit()
 
+#deterministic random number generator that uses password as a seed
+#produces a 16 integer key
 def compute_key(seed):
 	random.seed(seed)
 	key = ''
@@ -75,7 +77,7 @@ def hash_file(fname):
 		with open(fname, 'rb') as f:
 			plaintext = f.read()
 	except:
-		return 'ERROR: Invalid file name'
+		return 'ERROR'
 	h = SHA256.new(plaintext)
 	return h
 
@@ -89,17 +91,21 @@ def decrypt_file(File, passwd):
 	size = File[:BLOCK_SIZE]
 	i = File[BLOCK_SIZE:BLOCK_SIZE*2]
 	File = File[BLOCK_SIZE*2:]
-	decryptor = AES.new(key, mode, i)
+	try:
+		decryptor = AES.new(key, mode, i)
+	except:
+		return 'ERROR'
 	if (len(File) % BLOCK_SIZE) != 0:
-		return 'ERROR: Couldnt decrypt'
+		return 'ERROR'
 	plain = decryptor.decrypt(File)
 	plain = plain[:int(size)]
 	return plain
 
 def handle_put(fname, f, passwd):
 	Hash = hash_file(fname)
-	if Hash == 'ERROR: Invalid file name':
-		return Hash
+	errstring =  'ERROR: ' + fname + ' cannot be transferred'
+	if Hash == 'ERROR':
+		return errstring
 	if f == 'E':
 		key = compute_key(passwd)
 		Encfile = encrypt_file(key, fname)
@@ -110,10 +116,11 @@ def handle_put(fname, f, passwd):
 				plaintext = f.read()
 			return plaintext, Hash
 		except:
-			return 'ERROR: Invalid file name'
+			return 'ERROR: ' + fname + ' was not transferred'
 
 #parse command from client, return errors when necessary
 def handle_msg(msg):
+	passwd = ''
 	m = msg.split()
 	length = len(m)
 	if length > 4:
@@ -187,6 +194,7 @@ while 1:
 				#read in commands from client and only send to server if valid
 				msg = sys.stdin.readline()
 				if msg:
+					error = False
 					#receive output of handle_msg helper fn
 					out = handle_msg(msg)
 					#if the output is not an error, send command to server for processing
@@ -204,17 +212,33 @@ while 1:
 					elif (('ERROR' not in out) and ('get' in msg)):
 						tls_client.send(msg)
 						servFile = tls_client.recv(SIZE)
+						if 'ERROR' in servFile:
+							error = True
+							print servFile
 						msg = msg.split()
-						if msg[2] == 'E':
+						if ((msg[2] == 'E') and (not error)):
 							enc = decrypt_file(servFile, msg[3])
-							h = SHA256.new(enc)
-						Hash = tls_client.recv(SIZE)
-						if h.hexdigest() == Hash:
-							with open(msg[1], 'wb') as f:
-								f.write(enc)
-							print 'retrieval of', msg[1], 'complete'
-						else:
-							print 'ERROR: Computed hash of', msg[1], 'does not match retrieved hash'
+							if enc == 'ERROR':
+								print 'ERROR: decryption of ' + msg[1] + ' failed, was file encrypted?'
+								Hash = tls_client.recv(SIZE)
+							else:
+								h = SHA256.new(enc)
+								Hash = tls_client.recv(SIZE)
+								if h.hexdigest() == Hash:
+									with open(msg[1], 'wb') as f:
+										f.write(enc)
+									print 'retrieval of', msg[1], 'complete'
+								else:
+									print 'ERROR: Computed hash of', msg[1], 'does not match retrieved hash'
+						elif ((msg[2] == 'N') and (not error)):
+							h = SHA256.new(servFile)
+							Hash = tls_client.recv(SIZE)
+							if h.hexdigest() == Hash:
+								with open(msg[1], 'wb') as f:
+									f.write(servFile)
+								print 'retrieval of', msg[1], 'complete'
+							else:
+								print 'ERROR: Computed hash of', msg[1], 'does not match retrieved hash'
 					else:
 						print out
 

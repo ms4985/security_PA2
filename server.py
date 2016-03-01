@@ -47,24 +47,25 @@ tls_server = wrap_socket(server, ssl_version=PROTOCOL_TLSv1,
 #then the server responds accordingly with the correct helper fn
 def handle_client(sock, address):
 	try:
-		#try:
 		data = sock.recv(SIZE)
 		cmd = data.split()
 		if cmd[0] == 'put':
 			handle_put(data, sock)
 		if cmd[0] == 'get':
 			out = handle_get(data)
-			sock.send(out[0])
-			time.sleep(1)
-			sock.send(out[1])
+			if 'ERROR' in out:
+				sock.send(out)
+			else:
+				sock.send(out[0])
+				time.sleep(1)
+				sock.send(out[1])
 		if cmd[0] == 'stop':
-			print data
-		#finally:
-		#	print 'handled client'
+			connections.remove(sock)
+			sock.close()
+			sys.exit()
 	except:
 		#no data received by client so move on
 		pass
-
 
 def handle_put(data, sock):
 	data = data.split()
@@ -86,12 +87,13 @@ def handle_get(data):
 		with open(fname, 'rb') as f:
 			File = f.read()
 	except:
-		return 'ERROR: Invalid filename or file does not exist'
+		string = 'ERROR: ' + fname + ' cannot be retrieved'
+		return string
 	try:
 		with open(fname + '.sha256', 'rb') as f:
 			Hash = f.read()
 	except:
-		return 'ERROR: Cannot read hash file'
+		return 'ERROR: Hash file cannot be retrieved'
 	return File, Hash
 	
 
