@@ -172,6 +172,7 @@ def handle_msg(msg):
 	else:
 		return 'ERROR: Invalid commands, options are \"get\" \"put\" \"stop\"'
 
+#send the message to the server and then send the file and hash
 def send_put(sock, out, m):
 	sock.send(m)
 	#need to sleep in order to give server time to process
@@ -182,6 +183,10 @@ def send_put(sock, out, m):
 	m = m.split()
 	print 'transfer of', m[1], 'complete'
 
+#send the message to the server
+#check if server sent an error message
+#if flag is E, try to decrypt, respond if error if necessary, else compute hash and verify
+# if flag is N, receive hash and compute hash and verify
 def send_get(sock, out, m):
 	error = False
 	sock.send(m)
