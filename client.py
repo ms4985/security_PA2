@@ -15,7 +15,7 @@ import time
 from ssl import *
 
 #globals
-SIZE = 4096
+SIZE = 10000
 BLOCK_SIZE = 16
 
 #set up AES encryption

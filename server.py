@@ -13,7 +13,7 @@ import pickle
 import time
 
 #globals
-SIZE = 4096
+SIZE = 10000
 BLOCK_SIZE = 16
 connections = []
 aes_mode = AES.MODE_CBC
@@ -61,6 +61,8 @@ def handle_client(sock, address):
 			#else send the file and hash
 			else:
 				sock.send(out[0])
+				#time.sleep(1)
+				#sock.send('end')
 				time.sleep(1)
 				sock.send(out[1])
 
